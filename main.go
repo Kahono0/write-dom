@@ -8,13 +8,31 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
+	"gorm.io/gorm"
+	"gorm.io/driver/sqlite"
+	"time"
 )
 
 const (
 	sessionExpiredStatus = 403
 	mainapiUrl           = "https://api.writedom.com/writer"
 )
+type Job struct {
+	Id int `json:"id"`
+	Jobid string `json:"jobid"`
+}
 
+
+func InitDB() *gorm.DB {
+	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	db.AutoMigrate(&Job{})
+	return db
+}
+	
 func apiurl(path string) string {
 	return mainapiUrl + path
 }
@@ -24,6 +42,7 @@ func Login() (*LoginResponse, []*http.Cookie, error) {
 	params := url.Values{}
 	params.Add("email", "charlesproficientwriternyak1@gmail.com")
 	params.Add("password", "Doshab@21")
+	params.Add("_token", "4mPVoJhMnw3cpVY8KC43HglbDoD0nCfVPMZwLvtZ")
 
 	resp, err := http.PostForm(endpoint, params)
 	if err != nil {
@@ -50,7 +69,7 @@ func CheckAvailableJobs(cookiess []*http.Cookie) (*AvailableJobsResponse, error)
 	if err != nil {
 		return nil, err
 	}
-
+	//
 	params := endpoint.Query()
 	params.Set("page", "1")
 	params.Set("perPage", "10")
@@ -94,61 +113,118 @@ func CheckAvailableJobs(cookiess []*http.Cookie) (*AvailableJobsResponse, error)
 	return &availableJobsResponse, nil
 }
 
-func SendBid(cookie *[]http.Cookie){
-	applyUrl := apiurl("/apply")
-	endpoint,err := url.Parse(applyUrl)
+func SendBid(cookiess []*http.Cookie, id string)(*AppliedResponse, error) {
+	applyUrl := apiurl("/assignments/" + id + "/apply")
+	endpoint, err := url.Parse(applyUrl)
 	if err != nil {
 		log.Fatal(err)
+		return nil, err
 	}
-	jobId := "234375"
-	//https://api.writedom.com/writer/assignments/2816449/apply?user_id=1490371&assignment_id=2816449&user_id=1490371&access_token=none&app_id=3&_token=4mPVoJhMnw3cpVY8KC43HglbDoD0nCfVPMZwLvtZ&is_new_wd=true&local_time=2022-07-10+19:11:24
+
+	//https://api.writedom.com/writer/assignments/2816467/apply?user_id=1490371&assignment_id=2816467&user_id=1490371&access_token=none&app_id=3&_token=4mPVoJhMnw3cpVY8KC43HglbDoD0nCfVPMZwLvtZ&is_new_wd=true&local_time=2022-07-10+19%3A41%3A47
 	params := endpoint.Query()
 	params.Set("user_id", "1490371")
-	params.Set("assignment_id", jobId)
+	params.Set("assignment_id", id)
+	params.Set("user_id", "1490371")
+	params.Set("access_token", "none")
+	params.Set("app_id", "3")
+	params.Set("_token", "4mPVoJhMnw3cpVY8KC43HglbDoD0nCfVPMZwLvtZ")
+	params.Set("is_new_wd", "true")
+	params.Set("local_time", "2022-07-10+19%3A41%3A47")
+	
+	
+
 
 	endpoint.RawQuery = params.Encode()
+
 	client := http.DefaultClient
+
 	req, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil,err
 	}
+
 	req.Header.Set("Referer", "https://writedom.com/")
-	for _, cookie := range *cookie {
-		req.AddCookie(&cookie)
+	for _, cookie := range cookiess {
+		req.AddCookie(cookie)
 	}
+
 	res, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return nil,err
 	}
 	defer res.Body.Close()
+
 	response, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		log.Fatal(err)
+		return nil,err
 	}
-	fmt.Println(response)
-
-
+	fmt.Println(string(response))
+	var bidResponse AppliedResponse
+	err = json.Unmarshal(response, &bidResponse)
+	if err != nil {
+		return nil,err
+	}
+	log.Println("Successfully applied for job")
+	return &bidResponse, nil
 }
 
+func ParseJobs(jobs *AvailableJobsResponse) ([]string,error) {
+	var jobsId []string
+	for _, job := range jobs.Data.AvailableAssignments {
+		jobsId = append(jobsId, strconv.Itoa(job.ID))
+	}
+	return jobsId,nil
+}
 
 func main() {
+	log.Println("Starting...")
+	fmt.Println("Ctrl + C to exit")
 	_, cookies, err := Login()
 	if err != nil {
+
 		log.Fatal(err)
+		log.Fatal("Contact support (0111694419)")
+		return
 	}
-	// log.Println(AsPrettyJson(loginResponse))
 
-	jobs, err := CheckAvailableJobs(cookies)
-	if err != nil {
-		panic(err)
+	for{
+		jobs, err := CheckAvailableJobs(cookies)
+		if err != nil {
+			_,cookies,err=Login()
+			if err != nil {
+				log.Fatal(err)
+				log.Fatal("Contact support (0111694419)")
+				return
+			}
+		}
+		var jobsId []string
+		jobsId,err = ParseJobs(jobs)
+
+		db := InitDB()
+
+		jobdb := new(Job)
+
+		for _, job := range jobsId {
+			err = db.Where("jobid = ?", job).First(jobdb).Error
+			if err != nil {
+				_,_ = SendBid(cookies, job)
+				jobdb.Jobid = job
+				err = db.Create(jobdb).Error
+				if err != nil {
+					panic(err)
+				}
+			}
+			// }
+
+		}
+		log.Println("All caught up...")
+		log.Println("Checking for new jobs in 5 seconds...")
+		time.Sleep(time.Second * 5)
 	}
-	log.Println(AsPrettyJson(jobs))
 }
-
-
-
-
-
+	
+	// log.Println(AsPrettyJson(jobs))
 
 type LoginResponse struct {
 	Data struct {
@@ -261,7 +337,6 @@ type AlternativeResponse struct {
 	Alerts []interface{} `json:"alerts"`
 }
 
-
 func AsPrettyJson(input interface{}) string {
 	jsonB, _ := json.MarshalIndent(input, "", "  ")
 	return string(jsonB)
@@ -270,4 +345,11 @@ func AsPrettyJson(input interface{}) string {
 func AsJson(input interface{}) string {
 	jsonB, _ := json.Marshal(input)
 	return string(jsonB)
+}
+
+type AppliedResponse struct {
+	Data   []interface{} `json:"data"`
+	Status int           `json:"status"`
+	Errors []interface{} `json:"errors"`
+	Alerts []string      `json:"alerts"`
 }
