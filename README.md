@@ -1,2 +1,3 @@
 # write-dom
-# write-dom
+Bidding bot trying
+
