@@ -9,20 +9,21 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"gorm.io/gorm"
-	"gorm.io/driver/sqlite"
 	"time"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 const (
 	sessionExpiredStatus = 403
 	mainapiUrl           = "https://api.writedom.com/writer"
 )
+
 type Job struct {
-	Id int `json:"id"`
+	Id    int    `json:"id"`
 	Jobid string `json:"jobid"`
 }
-
 
 func InitDB() *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
@@ -32,7 +33,7 @@ func InitDB() *gorm.DB {
 	db.AutoMigrate(&Job{})
 	return db
 }
-	
+
 func apiurl(path string) string {
 	return mainapiUrl + path
 }
@@ -113,7 +114,7 @@ func CheckAvailableJobs(cookiess []*http.Cookie) (*AvailableJobsResponse, error)
 	return &availableJobsResponse, nil
 }
 
-func SendBid(cookiess []*http.Cookie, id string)(*AppliedResponse, error) {
+func SendBid(cookiess []*http.Cookie, id string) (*AppliedResponse, error) {
 	applyUrl := apiurl("/assignments/" + id + "/apply")
 	endpoint, err := url.Parse(applyUrl)
 	if err != nil {
@@ -131,9 +132,6 @@ func SendBid(cookiess []*http.Cookie, id string)(*AppliedResponse, error) {
 	params.Set("_token", "4mPVoJhMnw3cpVY8KC43HglbDoD0nCfVPMZwLvtZ")
 	params.Set("is_new_wd", "true")
 	params.Set("local_time", "2022-07-10+19%3A41%3A47")
-	
-	
-
 
 	endpoint.RawQuery = params.Encode()
 
@@ -141,7 +139,7 @@ func SendBid(cookiess []*http.Cookie, id string)(*AppliedResponse, error) {
 
 	req, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
 	req.Header.Set("Referer", "https://writedom.com/")
@@ -151,30 +149,30 @@ func SendBid(cookiess []*http.Cookie, id string)(*AppliedResponse, error) {
 
 	res, err := client.Do(req)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	defer res.Body.Close()
 
 	response, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	fmt.Println(string(response))
 	var bidResponse AppliedResponse
 	err = json.Unmarshal(response, &bidResponse)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	log.Println("Successfully applied for job")
 	return &bidResponse, nil
 }
 
-func ParseJobs(jobs *AvailableJobsResponse) ([]string,error) {
+func ParseJobs(jobs *AvailableJobsResponse) ([]string, error) {
 	var jobsId []string
 	for _, job := range jobs.Data.AvailableAssignments {
 		jobsId = append(jobsId, strconv.Itoa(job.ID))
 	}
-	return jobsId,nil
+	return jobsId, nil
 }
 
 func main() {
@@ -188,10 +186,10 @@ func main() {
 		return
 	}
 
-	for{
+	for {
 		jobs, err := CheckAvailableJobs(cookies)
 		if err != nil {
-			_,cookies,err=Login()
+			_, cookies, err = Login()
 			if err != nil {
 				log.Fatal(err)
 				log.Fatal("Contact support (0111694419)")
@@ -199,7 +197,13 @@ func main() {
 			}
 		}
 		var jobsId []string
-		jobsId,err = ParseJobs(jobs)
+		if jobs == nil {
+			log.Println("No jobs available")
+			log.Println("Checking for jobs in 5 minutes...")
+			time.Sleep(time.Second * 5)
+			continue
+		}
+		jobsId, err = ParseJobs(jobs)
 
 		db := InitDB()
 
@@ -208,7 +212,7 @@ func main() {
 		for _, job := range jobsId {
 			err = db.Where("jobid = ?", job).First(jobdb).Error
 			if err != nil {
-				_,_ = SendBid(cookies, job)
+				_, _ = SendBid(cookies, job)
 				jobdb.Jobid = job
 				err = db.Create(jobdb).Error
 				if err != nil {
@@ -219,12 +223,12 @@ func main() {
 
 		}
 		log.Println("All caught up...")
-		log.Println("Checking for new jobs in 5 seconds...")
+		log.Println("Checking for new jobs in 5 seconds..")
 		time.Sleep(time.Second * 5)
 	}
 }
-	
-	// log.Println(AsPrettyJson(jobs))
+
+// log.Println(AsPrettyJson(jobs))
 
 type LoginResponse struct {
 	Data struct {
