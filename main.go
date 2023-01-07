@@ -10,10 +10,12 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+	"os"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -23,6 +25,15 @@ const (
 
 type Job struct {
 	Jobid string `json:"jobid"`
+}
+
+func init(){
+	//load .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+
 }
 
 func InitDB() *gorm.DB {
@@ -41,13 +52,25 @@ func apiurl(path string) string {
 func Login() (*LoginResponse, []*http.Cookie, error) {
 	endpoint := apiurl("/login")
 	params := url.Values{}
-	params.Add("email", "charlesproficientwriternyak1@gmail.com")
-	params.Add("password", "Doshab@21")
-	params.Add("_token", "4mPVoJhMnw3cpVY8KC43HglbDoD0nCfVPMZwLvtZ")
+	// // params.Add("email", "academiawriting27@gmail.com")
+	// params.Add("email", godotenv.Get("EMAIL"))
 
+	// // params.Add("password", "HotGrb@5328")
+	// params.Add("password", godotenv.Get("PASSWORD"))
+	// // params.Add("_token", "4mPVoJhMnw3cpVY8KC43HglbDoD0nCfVPMZwLvtZ")
+	// params.Add("_token", godotenv.Get("_token"))
+	email := os.Getenv("EMAIL")
+	password := os.Getenv("PASSWORD")
+	token := os.Getenv("_token")
+	params.Add("email", email)
+	params.Add("password", password)
+	params.Add("_token", token)
+
+	fmt.Println(email, password, token)
 	resp, err := http.PostForm(endpoint, params)
 	if err != nil {
-		return nil, nil, err
+		time.Sleep(5 * time.Second)
+		Login()
 	}
 	defer resp.Body.Close()
 
@@ -55,11 +78,13 @@ func Login() (*LoginResponse, []*http.Cookie, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-
 	var loginResponse LoginResponse
 	err = json.Unmarshal(response, &loginResponse)
 	if err != nil {
-		return nil, nil, err
+		// return nil, nil, err
+		fmt.Println("Relogging in...")
+		time.Sleep(3 * time.Second)
+		Login()
 	}
 	return &loginResponse, resp.Cookies(), nil
 }
@@ -199,8 +224,8 @@ func main() {
 		var jobsId []string
 		if jobs == nil {
 			log.Println("No jobs available")
-			log.Println("Checking for jobs in 5 minutes...")
-			time.Sleep(time.Second * 5)
+			log.Println("Checking for jobs...")
+			time.Sleep(time.Second * 2)
 			continue
 		}
 		jobsId, err = ParseJobs(jobs)
