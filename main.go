@@ -52,13 +52,8 @@ func apiurl(path string) string {
 func Login() (*LoginResponse, []*http.Cookie, error) {
 	endpoint := apiurl("/login")
 	params := url.Values{}
-	// // params.Add("email", "academiawriting27@gmail.com")
-	// params.Add("email", godotenv.Get("EMAIL"))
 
-	// // params.Add("password", "HotGrb@5328")
-	// params.Add("password", godotenv.Get("PASSWORD"))
-	// // params.Add("_token", "4mPVoJhMnw3cpVY8KC43HglbDoD0nCfVPMZwLvtZ")
-	// params.Add("_token", godotenv.Get("_token"))
+	
 	email := os.Getenv("EMAIL")
 	password := os.Getenv("PASSWORD")
 	token := os.Getenv("_token")
