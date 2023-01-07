@@ -8,14 +8,14 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
-	"os"
 
+	"github.com/joho/godotenv"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"github.com/joho/godotenv"
 )
 
 const (
@@ -27,7 +27,7 @@ type Job struct {
 	Jobid string `json:"jobid"`
 }
 
-func init(){
+func init() {
 	//load .env file
 	err := godotenv.Load()
 	if err != nil {
@@ -53,7 +53,6 @@ func Login() (*LoginResponse, []*http.Cookie, error) {
 	endpoint := apiurl("/login")
 	params := url.Values{}
 
-	
 	email := os.Getenv("EMAIL")
 	password := os.Getenv("PASSWORD")
 	token := os.Getenv("_token")
@@ -61,7 +60,6 @@ func Login() (*LoginResponse, []*http.Cookie, error) {
 	params.Add("password", password)
 	params.Add("_token", token)
 
-	fmt.Println(email, password, token)
 	resp, err := http.PostForm(endpoint, params)
 	if err != nil {
 		time.Sleep(5 * time.Second)
@@ -142,7 +140,6 @@ func SendBid(cookiess []*http.Cookie, id string) (*AppliedResponse, error) {
 		return nil, err
 	}
 
-	//https://api.writedom.com/writer/assignments/2816467/apply?user_id=1490371&assignment_id=2816467&user_id=1490371&access_token=none&app_id=3&_token=4mPVoJhMnw3cpVY8KC43HglbDoD0nCfVPMZwLvtZ&is_new_wd=true&local_time=2022-07-10+19%3A41%3A47
 	params := endpoint.Query()
 	params.Set("user_id", "1490371")
 	params.Set("assignment_id", id)
@@ -231,7 +228,6 @@ func main() {
 
 		for _, job := range jobsId {
 			if err = db.Where("jobid = ?", job).First(jobdb).Error; err != nil {
-				// if err != nil {
 				_, _ = SendBid(cookies, job)
 				jobdb.Jobid = job
 				err = db.Create(jobdb).Error
@@ -239,7 +235,6 @@ func main() {
 					panic(err)
 				}
 			}
-			// }
 
 		}
 		log.Println("All caught up...")
@@ -247,8 +242,6 @@ func main() {
 		time.Sleep(time.Second * 5)
 	}
 }
-
-// log.Println(AsPrettyJson(jobs))
 
 type LoginResponse struct {
 	Data struct {
